@@ -1,0 +1,27 @@
+{
+  "name": "@withaspark/weather",
+  "version": "0.0.1",
+  "description": "Current weather and forecast fetching script",
+  "main": "src/withaspark.weather.js",
+  "scripts": {
+    "test": "node tests/test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/withaspark/weather.git"
+  },
+  "keywords": [
+    "weather",
+    "forecast",
+    "fetch"
+  ],
+  "author": "Stephen Parker <web@withaspark.com> (https://withaspark.com/)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/withaspark/weather/issues"
+  },
+  "homepage": "https://github.com/withaspark/weather#readme",
+  "dependencies": {
+    "sync-request": "^6.1.0"
+  }
+}

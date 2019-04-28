@@ -1,6 +1,6 @@
 {
   "name": "@withaspark/weather",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Current weather and forecast fetching script",
   "main": "src/withaspark.weather.js",
   "scripts": {
@@ -22,6 +22,9 @@
   },
   "homepage": "https://github.com/withaspark/weather#readme",
   "dependencies": {
+    "minimist": "^1.2.0",
+    "moment": "^2.24.0",
+    "suncalc": "^1.8.0",
     "sync-request": "^6.1.0"
   }
 }

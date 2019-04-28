@@ -1,8 +1,10 @@
 "use strict";
 
 const fs = require("fs");
-const path = require("path")
+const path = require("path");
 const util = require("util");
+const moment = require("moment");
+const SunCalc = require("suncalc");
 const request = require("sync-request");
 
 function Weather(options) {
@@ -17,20 +19,45 @@ function Weather(options) {
     var that = this;
 
     this.config = options;
-    this.config.zip = options.zip || 32202;
-    this.config.station = options.station || 'KJAX';
-    this.config.sun_url = options.sun_url || "https://api.duckduckgo.com/?q=sunrise%20today&format=json";
-    this.config.weather_url = options.weather_url || "https://api.weather.gov/stations/{station}/observations/latest";
+    this.config.station = options.station || "KJAX";
+    this.config.weather_url = "https://api.weather.gov/stations/{station}/observations/latest";
+    this.config.alert_url = "https://api.weather.gov/alerts/active?point={point}";
     this.config.cache_dir = (options.cache_dir || "/tmp").replace(new RegExp("/" + path.sep + "$/"));
     this.config.cache_prefix = options.cache_prefix || "withaspark.weather.";
     this.config.cache_lifetime = (options.hasOwnProperty("cache_lifetime"))
         ? options.cache_lifetime
         : 5;
     this.config.unknown = options.unknown || '?';
+    this.config.sunrise_buffer = 15;
     this.data = {};
 
-    cache('zip', this.config.zip);
     cache('station', this.config.station);
+
+    this.icons = {
+        'sunset': '\uf047',
+        'sunrise': '\uf046',
+        'day': '\uf00d',
+        'night': '\uf02e',
+
+        'tornado': '\uf056',
+        'mixed': '\uf017',
+        'snow': '\uf01b',
+        'rain': '\uf019',
+        'fog': '\uf014',
+        'vcloud': '\uf013',
+        'cloudy': '\uf041',
+        'hail': '\uf015',
+        'smoke': '\uf062',
+        'dust': '\uf063',
+        'ice': '\uf015',
+        'drizzle': '\uf019',
+        'haze': '\uf014',
+        'hurricane': '\uf073',
+        'lightning': '\uf016',
+        'showers': '\uf019',
+        'tropstorm': '\uf073',
+        'windy': '\uf050'
+    };
 
     /**
      * Get the value for a given key.
@@ -42,17 +69,28 @@ function Weather(options) {
         var cached = cache(key),
             saved = that.data.hasOwnProperty(key)
                 ? that.data[key]
-                : null;
+                : null,
+            value = null;
 
         if (cached !== null) {
-            return cached;
+            value = cached;
         }
 
         if (saved !== null) {
-            return saved;
+            value = saved;
         }
 
-        return that.config.unknown;
+        // Round all numbers to integers
+        if (that.isNumber(value)) {
+            return parseInt(value);
+        }
+
+        // If unknown or NaN
+        if (value === null || value !== value || value === 'NaN') {
+            return that.config.unknown;
+        }
+
+        return value;
     };
 
     /**
@@ -61,8 +99,10 @@ function Weather(options) {
      * @returns {void}
      */
     function init() {
-        fetchCitySunriseSunsetForZip();
         fetchWeatherForStation();
+        fetchAlerts();
+
+        calcSecondaryProperties();
     }
 
     /**
@@ -152,7 +192,7 @@ function Weather(options) {
             "expires:" + expiry + "\n" + value,
             function (err) {
                 if (err) {
-                    return console.log(err);
+                    return console.error(err);
                 }
             }
         );
@@ -215,28 +255,10 @@ function Weather(options) {
     };
 
     /**
-     * If needed, fetch the values for city, sunrise time, sunset time. If the values are already
-     * in the cache and non-expired, the data will not be requested again this time.
+     * Fetch weather conditions for a station.
      *
      * @returns {void}
      */
-    function fetchCitySunriseSunsetForZip() {
-        if (!isCacheExpiredMany(['city', 'sunrise', 'sunset'])) {
-            return;
-        }
-
-        var response = request("GET", that.config.sun_url),
-            reg = /sunrise in ([^,]+)(,\s.*)* is at ([0-9:]+\s*[aApP][mM]); sunset at ([0-9:]+\s*[aApP][mM])/,
-            matches = JSON.parse(response.getBody("UTF-8")).Answer.match(reg),
-            city = matches[1],
-            sunrise = matches[3],
-            sunset = matches[4];
-
-        cache('city', city);
-        cache('sunrise', sunrise);
-        cache('sunset', sunset);
-    };
-
     function fetchWeatherForStation() {
         if (!isCacheExpiredMany([
             'timestamp', 'raw', 'coordinates', 'elevation', 'text',
@@ -260,33 +282,82 @@ function Weather(options) {
 
         cache('timestamp', response.properties.timestamp);
         cache('raw', response.properties.rawMessage);
-        cache('coordinates', response.geometry.coordinates);
+        cache(
+            'coordinates',
+            response.geometry.coordinates
+                ? response.geometry.coordinates[1] + ',' + response.geometry.coordinates[0]
+                : null
+        );
         cache('elevation', that.metersToFeet(response.properties.elevation.value));
         cache('text', response.properties.textDescription);
         cache('temperature', that.degCtoF(response.properties.temperature.value));
         cache('dewpoint', that.degCtoF(response.properties.dewpoint.value));
         cache('windDirection', response.properties.windDirection.value);
-        cache('windSpeed', that.metersPerSecondToMph(response.properties.windSpeed));
-        cache('pressure', that.pascalsToMmhg(response.properties.barometricPressure));
+        cache('windSpeed', that.metersPerSecondToMph(response.properties.windSpeed.value));
+        cache('pressure', that.pascalsToMmhg(response.properties.barometricPressure.value));
         cache('visibility', that.metersToMiles(response.properties.visibility.value));
         cache('precipitation', that.metersToInches(response.properties.precipitationLastHour.value));
         cache('humidity', response.properties.relativeHumidity.value);
         cache('feelsLike', that.degCtoF(response.properties.heatIndex.value));
     }
 
+    /**
+     * Fetch weather advisories and alerts.
+     *
+     * @returns {void}
+     */
+    function fetchAlerts() {
+        if (!isCacheExpiredMany(['alerts'])) {
+            return;
+        }
+
+        var response = request(
+            "GET",
+            that.config.alert_url.replace('{point}', that.getCoordinates()),
+            {
+                headers: {
+                    'user-agent': '@withaspark/weather User',
+                },
+            }
+        );
+        response = JSON.parse(response.getBody("UTF-8"));
+
+        var events = [];
+        for (var i = 0; i < response.features.length; i++) {
+            events.push(response.features[i].properties.event);
+        }
+        cache('alerts', events.join("\n"));
+    }
+
+    /**
+     * Calculate secondary properties that are derived from primary properties.
+     *
+     * @returns {void}
+     */
+    function calcSecondaryProperties() {
+        var reftime = moment(),
+            coordinates = that.getCoordinates().split(",");
+        if (reftime.hour() >= 20 || reftime.hour() <= 4) {
+            reftime = reftime.startOf('day').add(1, 'day');
+        }
+        if (coordinates && coordinates.length == 2) {
+            var suntimes = SunCalc.getTimes(reftime, coordinates[0], coordinates[1]);
+            that.data.sunrise = moment(suntimes.sunrise).toISOString(true);
+            that.data.sunset = moment(suntimes.sunset).toISOString(true);
+        }
+
+        that.data.day = that.getIsDay();
+        that.data.night = that.getIsNight();
+        that.data.isSunrise = that.getIsSunrise();
+        that.data.isSunset = that.getIsSunset();
+        that.data.sunIcon = that.getSunIcon();
+        that.data.conditionIcon = that.getConditionIcon();
+    }
+
     init();
 
     return this;
 }
-
-/**
- * Get the zip code.
- *
- * @returns {string}
- */
-Weather.prototype.getZip = function () {
-    return this.getValue('zip');
-};
 
 /**
  * Get the station code.
@@ -298,12 +369,61 @@ Weather.prototype.getStation = function () {
 };
 
 /**
- * Get the locale's city.
+ * Is the current time during the day.
  *
- * @returns {string}
+ * @return {integer}
  */
-Weather.prototype.getCity = function () {
-    return this.getValue('city');
+Weather.prototype.getIsDay = function () {
+    var now = moment(),
+        sunrise = moment(this.getSunrise(), "h:m A"),
+        sunset = moment(this.getSunset(), "h:m A");
+
+    if (now >= sunrise && now <= sunset) {
+        return 1;
+    }
+
+    return 0;
+};
+
+/**
+ * Is the current time during the night.
+ *
+ * @return {integer}
+ */
+Weather.prototype.getIsNight = function () {
+    return 1 - this.getIsDay();
+};
+
+/**
+ * Is the given time around sunrise.
+ *
+ * @return {integer}
+ */
+Weather.prototype.getIsSunrise = function () {
+    var now = moment(),
+        sunrise = moment(this.getSunrise(), "h:m A");
+
+    if (now >= sunrise.subtract(this.config.sunrise_buffer, 'minutes') && now <= sunrise.add(this.config.sunrise_buffer, 'minutes')) {
+        return 1;
+    }
+
+    return 0;
+};
+
+/**
+ * Is the given time around sunset.
+ *
+ * @return {integer}
+ */
+Weather.prototype.getIsSunset = function () {
+    var now = moment(),
+        sunset = moment(this.getSunset(), "h:m A");
+
+    if (now >= sunset.subtract(this.config.sunrise_buffer, 'minutes') && now <= sunset.add(this.config.sunrise_buffer, 'minutes')) {
+        return 1;
+    }
+
+    return 0;
 };
 
 /**
@@ -324,61 +444,237 @@ Weather.prototype.getSunset = function () {
     return this.getValue('sunset');
 };
 
+/**
+ * Get the weather last update time.
+ *
+ * @returns {string}
+ */
 Weather.prototype.getTimestamp = function () {
     return this.getValue('timestamp');
 };
 
+/**
+ * Get the raw METAR data.
+ *
+ * @returns {string}
+ */
 Weather.prototype.getRaw = function () {
     return this.getValue('raw');
 };
 
+/**
+ * Get the latitude-longitude coordinates.
+ *
+ * @returns {string}
+ */
 Weather.prototype.getCoordinates = function () {
     return this.getValue('coordinates');
 };
 
+/**
+ * Get the elevation of the station.
+ *
+ * @return {integer}
+ */
 Weather.prototype.getElevation = function () {
     return this.getValue('elevation');
 };
 
+/**
+ * Get a brief textual description of conditions.
+ *
+ * @returns {string}
+ */
 Weather.prototype.getText = function () {
     return this.getValue('text');
 };
-
+/**
+ * Get the temperature at the station.
+ *
+ * @returns {integer}
+ */
 Weather.prototype.getTemperature = function () {
     return this.getValue('temperature');
 };
 
+/**
+ * Get the dewpoint temperature at the station.
+ *
+ * @returns {integer}
+ */
 Weather.prototype.getDewpoint = function () {
     return this.getValue('dewpoint');
 };
 
+/**
+ * Get the wind direction at the station.
+ *
+ * @returns {integer}
+ */
 Weather.prototype.getWindDirection = function () {
     return this.getValue('windDirection');
 };
 
+/**
+ * Get the wind speed at the station.
+ *
+ * @returns {integer}
+ */
 Weather.prototype.getWindSpeed = function () {
     return this.getValue('windSpeed');
 };
 
+/**
+ * Get the barometric pressure at the station.
+ *
+ * @returns {integer}
+ */
 Weather.prototype.getPressure = function () {
     return this.getValue('pressure');
 };
 
+/**
+ * Get the visibility distance at the station.
+ *
+ * @returns {integer}
+ */
 Weather.prototype.getVisibility = function () {
     return this.getValue('visibility');
 };
 
+/**
+ * Get the amount of rainfall in the previous 1 hour at the station.
+ *
+ * @returns {string}
+ */
 Weather.prototype.getPrecipitation = function () {
     return this.getValue('precipitation');
 };
 
+/**
+ * Get the relative humidity at the station.
+ *
+ * @returns {integer}
+ */
 Weather.prototype.getHumidity = function () {
     return this.getValue('humidity');
 };
 
+/**
+ * Get the feels-like temperature at the station.
+ *
+ * @returns {integer}
+ */
 Weather.prototype.getFeelsLike = function () {
     return this.getValue('feelsLike');
 };
+
+/**
+ * Get the weather advisory event types at the station.
+ *
+ * @returns {string} A newline delimited list of advisory event types
+ */
+Weather.prototype.getAlerts = function () {
+    return this.getValue('alerts');
+};
+
+/**
+ * Gets an icon for the sun position (day/night/rising/setting).
+ *
+ * @returns {char} Character code of icon for weather icon font
+ */
+Weather.prototype.getSunIcon = function () {
+    if (this.getIsSunset()) {
+        return this.icons.sunset;
+    }
+
+    if (this.getIsSunrise()) {
+        return this.icons.sunrise;
+    }
+
+    if (this.getIsDay()) {
+        return this.icons.day;
+    }
+
+    return this.icons.night;
+}
+
+/**
+ * Gets an icon for the conditions.
+ *
+ * @returns {char} Character code of the icon for the weather icon font
+ */
+Weather.prototype.getConditionIcon = function () {
+    var icon = this.getSunIcon();
+
+    if (this.getAlerts().match(/trop.*storm/i)) {
+        return this.icons.tropstorm;
+    }
+
+    if (this.getAlerts().match(/hurricane/i)) {
+        return this.icons.hurricane;
+    }
+
+    if (this.getAlerts().match(/tornado/i)) {
+        return this.icons.tornado;
+    }
+
+    if (this.getAlerts().match(/thunderstorm/i)) {
+        return this.icons.lightning;
+    }
+
+    if (this.getAlerts().match(/(mixed|freezing|sleet)/i)) {
+        return this.icons.mixed;
+    }
+
+    if (this.getAlerts().match(/(blizzard|snow)/i)) {
+        return this.icons.snow;
+    }
+
+    if (this.getAlerts().match(/drizzle/i)) {
+        return this.icons.drizzle;
+    }
+
+    if (this.getAlerts().match(/showers/i)) {
+        return this.icons.showers;
+    }
+
+    if (this.getAlerts().match(/hail/i)) {
+        return this.icons.hail;
+    }
+
+    if (this.getAlerts().match(/dust/i)) {
+        return this.icons.dust;
+    }
+
+    if (this.getAlerts().match(/fog/i)) {
+        return this.icons.fog;
+    }
+
+    if (this.getAlerts().match(/haze/i)) {
+        return this.icons.haze;
+    }
+
+    if (this.getAlerts().match(/smok(e|y)/i)) {
+        return this.icons.smoke;
+    }
+
+    if (this.getAlerts().match(/bluster|windy/i)) {
+        return this.icons.window;
+    }
+
+    if (this.getAlerts().match(/mostly cloudy/i)) {
+        return this.icons.vcloud;
+    }
+
+    if (this.getAlerts().match(/cloudy/i)) {
+        return this.icons.cloudy;
+    }
+
+    return icon;
+};
+
+
 
 /**
  * Convert temperature from degrees Celcius to degrees Fahrenheit.
@@ -450,11 +746,26 @@ Weather.prototype.metersToInches = function (length) {
     return this.metersToFeet(length) * 12;
 };
 
+/**
+ * Determines if value is not a number.
+ *
+ * @param {*} value
+ * @returns {boolean}
+ */
+Weather.prototype.isNumber = function (value) {
+    return (!isNaN(parseFloat(value)) && isFinite(value));
+};
+
+
+
+/**
+ * Get all of the most important properties.
+ *
+ * @returns {object}
+ */
 Weather.prototype.get = function () {
     return {
-        zip: this.getZip(),
         station: this.getStation(),
-        city: this.getCity(),
         sunrise: this.getSunrise(),
         sunset: this.getSunset(),
         timestamp: this.getTimestamp(),
@@ -470,35 +781,16 @@ Weather.prototype.get = function () {
         visibility: this.getVisibility(),
         precipitation: this.getPrecipitation(),
         humidity: this.getHumidity(),
-        feelsLike: this.getFeelsLike()
+        feelsLike: this.getFeelsLike(),
+        alerts: this.getAlerts(),
+        sunIcon: this.getSunIcon(),
+        conditionIcon: this.getConditionIcon(),
+        isDay: this.getIsDay(),
+        isNight: this.getIsNight(),
+        isSunrise: this.getIsSunrise(),
+        isSunset: this.getIsSunset()
     };
 };
-
-Weather.icons = {
-    'sunset': '\uf047',
-    'sunrise': '\uf046',
-    'day': '\uf00d',
-    'night': '\uf02e',
-
-    'tornado': '\uf056',
-    'mixed': '\uf017',
-    'snow': '\uf01b',
-    'rain': '\uf019',
-    'fog': '\uf014',
-    'vcloud': '\uf013',
-    'cloudy': '\uf041',
-    'hail': '\uf015',
-    'smoke': '\uf062',
-    'dust': '\uf063',
-    'ice': '\uf015',
-    'drizzle': '\uf019',
-    'haze': '\uf014',
-    'hurricane': '\uf073',
-    'lightning': '\uf016',
-    'showers': '\uf019',
-    'tropstorm': '\uf073',
-    'windy': '\uf050',
-}
 
 
 

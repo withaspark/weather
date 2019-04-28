@@ -1,9 +1,8 @@
 var assert = require('assert');
-var Weather = require('../src/withaspark.weather.js')({ cache_lifetime: 0 });
+var Weather = require('../src/withaspark.weather.js')({ station: "KJAX", cache_lifetime: 0 });
 
 assert.ok(Weather.get());
 assert.ok(Weather.getStation());
-assert.ok(Weather.getZip());
 assert.ok(Weather.getCity());
 assert.ok(Weather.getSunrise());
 assert.ok(Weather.getSunset());

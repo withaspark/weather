@@ -16,10 +16,10 @@ npm install --save @withaspark/weather
 var Weather = require('path/to/src/withaspark.weather.js')({ station: "KJAX", cache_lifetime: 10 });
 
 console.log(Weather.getTemperature());
-// 68
+// 62
 
 console.log(Weather.getSunrise());
-// "6:45 AM"
+// "2019-04-28T06:47:22.419-04:00"
 
 console.log(Weather.get());
 // { station: 'KJAX',
@@ -54,7 +54,7 @@ path/to/src/withaspark.weather.cli.js --station=KJAX temperature
 # 68
 
 path/to/src/withaspark.weather.cli.js --station=KJAX sunrise
-# "6:45 AM"
+# "2019-04-28T06:47:22.419-04:00"
 
 path/to/src/withaspark.weather.cli.js --station=KJAX
 # { station: 'KJAX',

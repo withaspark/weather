@@ -23,7 +23,7 @@ function Weather(options) {
     this.config.weather_url = "https://api.weather.gov/stations/{station}/observations/latest";
     this.config.alert_url = "https://api.weather.gov/alerts/active?point={point}";
     this.config.cache_dir = (options.cache_dir || "/tmp").replace(new RegExp("/" + path.sep + "$/"));
-    this.config.cache_prefix = options.cache_prefix || "withaspark.weather.";
+    this.config.cache_prefix = options.cache_prefix || ("withaspark.weather." + this.config.station + ".");
     this.config.cache_lifetime = (options.hasOwnProperty("cache_lifetime"))
         ? options.cache_lifetime
         : 5;
@@ -261,6 +261,7 @@ function Weather(options) {
      */
     function fetchWeatherForStation() {
         if (!isCacheExpiredMany([
+            'station',
             'timestamp', 'raw', 'coordinates', 'elevation', 'text',
             'temperature', 'dewpoint', 'windDirection', 'windSpeed',
             'pressure', 'visibility', 'precipitation', 'humidity',

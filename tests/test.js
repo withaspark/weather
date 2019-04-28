@@ -1,6 +1,23 @@
 var assert = require('assert');
 var Weather = require('../src/withaspark.weather.js')({ cache_lifetime: 0 });
 
+assert.ok(Weather.get());
+assert.ok(Weather.getStation());
+assert.ok(Weather.getZip());
 assert.ok(Weather.getCity());
 assert.ok(Weather.getSunrise());
 assert.ok(Weather.getSunset());
+assert.ok(Weather.getTimestamp());
+assert.ok(Weather.getRaw());
+assert.ok(Weather.getCoordinates());
+assert.ok(Weather.getElevation());
+assert.ok(Weather.getText());
+assert.ok(Weather.getTemperature());
+assert.ok(Weather.getDewpoint());
+assert.ok(Weather.getWindDirection());
+assert.ok(Weather.getWindSpeed());
+assert.ok(Weather.getPressure());
+assert.ok(Weather.getVisibility());
+assert.ok(Weather.getPrecipitation());
+assert.ok(Weather.getHumidity());
+assert.ok(Weather.getFeelsLike());

@@ -1,6 +1,6 @@
 {
   "name": "@withaspark/weather",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Current weather and forecast fetching script",
   "main": "src/withaspark.weather.js",
   "scripts": {

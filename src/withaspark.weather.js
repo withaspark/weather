@@ -18,13 +18,19 @@ function Weather(options) {
 
     this.config = options;
     this.config.zip = options.zip || 32202;
+    this.config.station = options.station || 'KJAX';
     this.config.sun_url = options.sun_url || "https://api.duckduckgo.com/?q=sunrise%20today&format=json";
+    this.config.weather_url = options.weather_url || "https://api.weather.gov/stations/{station}/observations/latest";
     this.config.cache_dir = (options.cache_dir || "/tmp").replace(new RegExp("/" + path.sep + "$/"));
     this.config.cache_prefix = options.cache_prefix || "withaspark.weather.";
     this.config.cache_lifetime = (options.hasOwnProperty("cache_lifetime"))
         ? options.cache_lifetime
         : 5;
+    this.config.unknown = options.unknown || '?';
     this.data = {};
+
+    cache('zip', this.config.zip);
+    cache('station', this.config.station);
 
     /**
      * Get the value for a given key.
@@ -33,7 +39,20 @@ function Weather(options) {
      * @returns {*}
      */
     this.getValue = function (key) {
-        return cache(key) || that.data[key];
+        var cached = cache(key),
+            saved = that.data.hasOwnProperty(key)
+                ? that.data[key]
+                : null;
+
+        if (cached !== null) {
+            return cached;
+        }
+
+        if (saved !== null) {
+            return saved;
+        }
+
+        return that.config.unknown;
     };
 
     /**
@@ -43,6 +62,7 @@ function Weather(options) {
      */
     function init() {
         fetchCitySunriseSunsetForZip();
+        fetchWeatherForStation();
     }
 
     /**
@@ -90,6 +110,22 @@ function Weather(options) {
             age = getCacheAge(key);
 
         return (age >= expiry);
+    }
+
+    /**
+     * Check if the cache of any provided keys has expired.
+     *
+     * @param {Array<string>} keys
+     * @returns {boolean}
+     */
+    function isCacheExpiredMany(keys) {
+        for (var i = 0; i < keys.length; i++) {
+            if (isCacheExpired(keys[i])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -185,7 +221,7 @@ function Weather(options) {
      * @returns {void}
      */
     function fetchCitySunriseSunsetForZip() {
-        if (!(isCacheExpired('city') || isCacheExpired('sunrise') || isCacheExpired('sunset'))) {
+        if (!isCacheExpiredMany(['city', 'sunrise', 'sunset'])) {
             return;
         }
 
@@ -196,15 +232,70 @@ function Weather(options) {
             sunrise = matches[3],
             sunset = matches[4];
 
-        cache('city', city, that.config.cache_lifetime);
-        cache('sunrise', sunrise, that.config.cache_lifetime);
-        cache('sunset', sunset, that.config.cache_lifetime);
+        cache('city', city);
+        cache('sunrise', sunrise);
+        cache('sunset', sunset);
     };
+
+    function fetchWeatherForStation() {
+        if (!isCacheExpiredMany([
+            'timestamp', 'raw', 'coordinates', 'elevation', 'text',
+            'temperature', 'dewpoint', 'windDirection', 'windSpeed',
+            'pressure', 'visibility', 'precipitation', 'humidity',
+            'feelsLike'
+        ])) {
+            return;
+        }
+
+        var response = request(
+            "GET",
+            that.config.weather_url.replace('{station}', that.config.station),
+            {
+                headers: {
+                    'user-agent': '@withaspark/weather User',
+                },
+            }
+        );
+        response = JSON.parse(response.getBody("UTF-8"));
+
+        cache('timestamp', response.properties.timestamp);
+        cache('raw', response.properties.rawMessage);
+        cache('coordinates', response.geometry.coordinates);
+        cache('elevation', that.metersToFeet(response.properties.elevation.value));
+        cache('text', response.properties.textDescription);
+        cache('temperature', that.degCtoF(response.properties.temperature.value));
+        cache('dewpoint', that.degCtoF(response.properties.dewpoint.value));
+        cache('windDirection', response.properties.windDirection.value);
+        cache('windSpeed', that.metersPerSecondToMph(response.properties.windSpeed));
+        cache('pressure', that.pascalsToMmhg(response.properties.barometricPressure));
+        cache('visibility', that.metersToMiles(response.properties.visibility.value));
+        cache('precipitation', that.metersToInches(response.properties.precipitationLastHour.value));
+        cache('humidity', response.properties.relativeHumidity.value);
+        cache('feelsLike', that.degCtoF(response.properties.heatIndex.value));
+    }
 
     init();
 
     return this;
 }
+
+/**
+ * Get the zip code.
+ *
+ * @returns {string}
+ */
+Weather.prototype.getZip = function () {
+    return this.getValue('zip');
+};
+
+/**
+ * Get the station code.
+ *
+ * @returns {string}
+ */
+Weather.prototype.getStation = function () {
+    return this.getValue('station');
+};
 
 /**
  * Get the locale's city.
@@ -232,5 +323,183 @@ Weather.prototype.getSunrise = function () {
 Weather.prototype.getSunset = function () {
     return this.getValue('sunset');
 };
+
+Weather.prototype.getTimestamp = function () {
+    return this.getValue('timestamp');
+};
+
+Weather.prototype.getRaw = function () {
+    return this.getValue('raw');
+};
+
+Weather.prototype.getCoordinates = function () {
+    return this.getValue('coordinates');
+};
+
+Weather.prototype.getElevation = function () {
+    return this.getValue('elevation');
+};
+
+Weather.prototype.getText = function () {
+    return this.getValue('text');
+};
+
+Weather.prototype.getTemperature = function () {
+    return this.getValue('temperature');
+};
+
+Weather.prototype.getDewpoint = function () {
+    return this.getValue('dewpoint');
+};
+
+Weather.prototype.getWindDirection = function () {
+    return this.getValue('windDirection');
+};
+
+Weather.prototype.getWindSpeed = function () {
+    return this.getValue('windSpeed');
+};
+
+Weather.prototype.getPressure = function () {
+    return this.getValue('pressure');
+};
+
+Weather.prototype.getVisibility = function () {
+    return this.getValue('visibility');
+};
+
+Weather.prototype.getPrecipitation = function () {
+    return this.getValue('precipitation');
+};
+
+Weather.prototype.getHumidity = function () {
+    return this.getValue('humidity');
+};
+
+Weather.prototype.getFeelsLike = function () {
+    return this.getValue('feelsLike');
+};
+
+/**
+ * Convert temperature from degrees Celcius to degrees Fahrenheit.
+ *
+ * @param {integer|float} temp Temperature in degrees Celcius
+ * @returns {float} Temperature in degrees Fahrenheit
+ */
+Weather.prototype.degCtoF = function (temp) {
+    return ((9 / 5) * temp) + 32;
+};
+
+/**
+ * Convert speed from meters per second to miles per hour.
+ *
+ * @param {integer|float} speed Speed in m/s
+ * @returns {float} Speed in mph
+ */
+Weather.prototype.metersPerSecondToMph = function (speed) {
+    return speed * 2.23694;
+};
+
+/**
+ * Convert length from meters to inches.
+ *
+ * @param {integer|float} length Length in m
+ * @returns {float} Length in in
+ */
+Weather.prototype.mToIn = function (length) {
+    return length * 3.28084 * 12;
+};
+
+/**
+ * Convert pressure from Pa to mmHg.
+ *
+ * @param {integer|float} pressure Pressure in Pa
+ * @returns {float} Pressure in mmHg
+ */
+Weather.prototype.pascalsToMmhg = function (pressure) {
+    return pressure * 0.00750062;
+};
+
+/**
+ * Convert length from meters to miles.
+ *
+ * @param {integer|float} length Length in m
+ * @returns {float} Length in mi
+ */
+Weather.prototype.metersToMiles = function (length) {
+    return this.metersToFeet(length) / 5280;
+};
+
+/**
+ * Convert length from meters to feet.
+ *
+ * @param {integer|float} length Length in m
+ * @returns {float} Length in ft
+ */
+Weather.prototype.metersToFeet = function (length) {
+    return length * 3.28084;
+};
+
+/**
+ * Convert length from meters to inches.
+ *
+ * @param {integer|float} length Length in m
+ * @returns {float} Length in in
+ */
+Weather.prototype.metersToInches = function (length) {
+    return this.metersToFeet(length) * 12;
+};
+
+Weather.prototype.get = function () {
+    return {
+        zip: this.getZip(),
+        station: this.getStation(),
+        city: this.getCity(),
+        sunrise: this.getSunrise(),
+        sunset: this.getSunset(),
+        timestamp: this.getTimestamp(),
+        raw: this.getRaw(),
+        coordinates: this.getCoordinates(),
+        elevation: this.getElevation(),
+        text: this.getText(),
+        temperature: this.getTemperature(),
+        dewpoint: this.getDewpoint(),
+        windDirection: this.getWindDirection(),
+        windSpeed: this.getWindSpeed(),
+        pressure: this.getPressure(),
+        visibility: this.getVisibility(),
+        precipitation: this.getPrecipitation(),
+        humidity: this.getHumidity(),
+        feelsLike: this.getFeelsLike()
+    };
+};
+
+Weather.icons = {
+    'sunset': '\uf047',
+    'sunrise': '\uf046',
+    'day': '\uf00d',
+    'night': '\uf02e',
+
+    'tornado': '\uf056',
+    'mixed': '\uf017',
+    'snow': '\uf01b',
+    'rain': '\uf019',
+    'fog': '\uf014',
+    'vcloud': '\uf013',
+    'cloudy': '\uf041',
+    'hail': '\uf015',
+    'smoke': '\uf062',
+    'dust': '\uf063',
+    'ice': '\uf015',
+    'drizzle': '\uf019',
+    'haze': '\uf014',
+    'hurricane': '\uf073',
+    'lightning': '\uf016',
+    'showers': '\uf019',
+    'tropstorm': '\uf073',
+    'windy': '\uf050',
+}
+
+
 
 module.exports = Weather;

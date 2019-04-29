@@ -47,6 +47,7 @@ function Weather(options) {
         'vcloud': '\uf013',
         'cloudy': '\uf041',
         'hail': '\uf015',
+        'fire': '\uf0c7',
         'smoke': '\uf062',
         'dust': '\uf063',
         'ice': '\uf015',
@@ -336,13 +337,11 @@ function Weather(options) {
      * @returns {void}
      */
     function calcSecondaryProperties() {
-        var reftime = moment(),
+        var now = moment(),
             coordinates = that.getCoordinates().split(",");
-        if (reftime.hour() >= 20 || reftime.hour() <= 4) {
-            reftime = reftime.startOf('day').add(1, 'day');
-        }
+
         if (coordinates && coordinates.length == 2) {
-            var suntimes = SunCalc.getTimes(reftime, coordinates[0], coordinates[1]);
+            var suntimes = SunCalc.getTimes(now, coordinates[0], coordinates[1]);
             that.data.sunrise = moment(suntimes.sunrise).toISOString(true);
             that.data.sunset = moment(suntimes.sunset).toISOString(true);
         }
@@ -606,69 +605,74 @@ Weather.prototype.getSunIcon = function () {
  * @returns {char} Character code of the icon for the weather icon font
  */
 Weather.prototype.getConditionIcon = function () {
-    var icon = this.getSunIcon();
+    var icon = this.getSunIcon(),
+        condition = this.getAlerts() + "\n" + this.getText();
 
-    if (this.getAlerts().match(/trop.*storm/i)) {
+    if (condition.match(/trop.*storm/i)) {
         return this.icons.tropstorm;
     }
 
-    if (this.getAlerts().match(/hurricane/i)) {
+    if (condition.match(/hurricane/i)) {
         return this.icons.hurricane;
     }
 
-    if (this.getAlerts().match(/tornado/i)) {
+    if (condition.match(/tornado/i)) {
         return this.icons.tornado;
     }
 
-    if (this.getAlerts().match(/thunderstorm/i)) {
+    if (condition.match(/thunderstorm/i)) {
         return this.icons.lightning;
     }
 
-    if (this.getAlerts().match(/(mixed|freezing|sleet)/i)) {
+    if (condition.match(/(mixed|freezing|sleet)/i)) {
         return this.icons.mixed;
     }
 
-    if (this.getAlerts().match(/(blizzard|snow)/i)) {
+    if (condition.match(/(blizzard|snow)/i)) {
         return this.icons.snow;
     }
 
-    if (this.getAlerts().match(/drizzle/i)) {
+    if (condition.match(/drizzle/i)) {
         return this.icons.drizzle;
     }
 
-    if (this.getAlerts().match(/showers/i)) {
+    if (condition.match(/showers/i)) {
         return this.icons.showers;
     }
 
-    if (this.getAlerts().match(/hail/i)) {
+    if (condition.match(/hail/i)) {
         return this.icons.hail;
     }
 
-    if (this.getAlerts().match(/dust/i)) {
+    if (condition.match(/dust/i)) {
         return this.icons.dust;
     }
 
-    if (this.getAlerts().match(/fog/i)) {
+    if (condition.match(/fog/i)) {
         return this.icons.fog;
     }
 
-    if (this.getAlerts().match(/haze/i)) {
+    if (condition.match(/haze/i)) {
         return this.icons.haze;
     }
 
-    if (this.getAlerts().match(/smok(e|y)/i)) {
+    if (condition.match(/fire/i)) {
+        return this.icons.fire;
+    }
+
+    if (condition.match(/smok(e|y)/i)) {
         return this.icons.smoke;
     }
 
-    if (this.getAlerts().match(/bluster|windy/i)) {
+    if (condition.match(/bluster|windy/i)) {
         return this.icons.window;
     }
 
-    if (this.getAlerts().match(/mostly cloudy/i)) {
+    if (condition.match(/mostly cloudy/i)) {
         return this.icons.vcloud;
     }
 
-    if (this.getAlerts().match(/cloudy/i)) {
+    if (condition.match(/cloudy/i)) {
         return this.icons.cloudy;
     }
 

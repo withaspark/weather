@@ -347,8 +347,8 @@ function Weather(options) {
             that.data.sunset = moment(suntimes.sunset).toISOString(true);
         }
 
-        that.data.day = that.getIsDay();
-        that.data.night = that.getIsNight();
+        that.data.isDay = that.getIsDay();
+        that.data.isNight = that.getIsNight();
         that.data.isSunrise = that.getIsSunrise();
         that.data.isSunset = that.getIsSunset();
         that.data.sunIcon = that.getSunIcon();

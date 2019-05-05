@@ -30,6 +30,7 @@ function Weather(options) {
     this.config.unknown = options.unknown || '?';
     this.config.sunrise_buffer = 15;
     this.data = {};
+    this.setNow();
 
     cache('station', this.config.station);
 
@@ -337,7 +338,7 @@ function Weather(options) {
      * @returns {void}
      */
     function calcSecondaryProperties() {
-        var now = moment(),
+        var now = that.now,
             coordinates = that.getCoordinates().split(",");
 
         if (coordinates && coordinates.length == 2) {
@@ -360,6 +361,29 @@ function Weather(options) {
 }
 
 /**
+ * Get the internal now time.
+ *
+ * @returns {Moment}
+ */
+Weather.prototype.getNow = function () {
+    return this.now;
+};
+
+/**
+ * Set the internal now time. If no time is provided, will use current time.
+ *
+ * @param {Moment} now (optional)
+ * @returns {void}
+ */
+Weather.prototype.setNow = function (now) {
+    if (typeof now === 'undefined') {
+        now = moment();
+    }
+
+    this.now = now;
+};
+
+/**
  * Get the station code.
  *
  * @returns {string}
@@ -374,11 +398,11 @@ Weather.prototype.getStation = function () {
  * @return {integer}
  */
 Weather.prototype.getIsDay = function () {
-    var now = moment(),
-        sunrise = moment(this.getSunrise(), "h:m A"),
-        sunset = moment(this.getSunset(), "h:m A");
+    var now = this.getNow(),
+        sunrise = moment(this.getSunrise()),
+        sunset = moment(this.getSunset());
 
-    if (now >= sunrise && now <= sunset) {
+    if (now.isBetween(sunrise, sunset, null, '[]')) {
         return 1;
     }
 
@@ -400,10 +424,10 @@ Weather.prototype.getIsNight = function () {
  * @return {integer}
  */
 Weather.prototype.getIsSunrise = function () {
-    var now = moment(),
-        sunrise = moment(this.getSunrise(), "h:m A");
+    var now = this.getNow(),
+        sunrise = moment(this.getSunrise());
 
-    if (now >= sunrise.subtract(this.config.sunrise_buffer, 'minutes') && now <= sunrise.add(this.config.sunrise_buffer, 'minutes')) {
+    if (now.isBetween(moment(sunrise).subtract(this.config.sunrise_buffer, 'minutes'), moment(sunrise).add(this.config.sunrise_buffer, 'minutes'), null, '[]')) {
         return 1;
     }
 
@@ -416,10 +440,10 @@ Weather.prototype.getIsSunrise = function () {
  * @return {integer}
  */
 Weather.prototype.getIsSunset = function () {
-    var now = moment(),
-        sunset = moment(this.getSunset(), "h:m A");
+    var now = this.getNow(),
+        sunset = moment(this.getSunset());
 
-    if (now >= sunset.subtract(this.config.sunrise_buffer, 'minutes') && now <= sunset.add(this.config.sunrise_buffer, 'minutes')) {
+    if (now.isBetween(moment(sunset).subtract(this.config.sunrise_buffer, 'minutes'), moment(sunset).add(this.config.sunrise_buffer, 'minutes'), null, '[]')) {
         return 1;
     }
 

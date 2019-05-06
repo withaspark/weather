@@ -13,6 +13,9 @@ var Weather = require("../src/withaspark.weather.js")({
     cache_lifetime: args.hasOwnProperty("cache_lifetime")
         ? args.cache_lifetime
         : null,
+    user_agent: args.hasOwnProperty("user_agent")
+        ? args.user_agent
+        : null,
     unknown: args.hasOwnProperty("unknown")
         ? args.unknown
         : null

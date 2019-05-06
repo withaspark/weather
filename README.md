@@ -92,6 +92,7 @@ path/to/src/withaspark.weather.cli.js --station=KJAX
 | `cache_dir` | "/tmp" | Directory to write cache files too. |
 | `cache_prefix` | "withaspark.weather." | Prefix for cache file names. |
 | `cache_lifetime` | 5 | Number of minutes to cache results before refetching. |
+| `user_agent` | "@withaspark/weather User" | User agent to use when making requests to weather API. If experiencing rate-limiting issues, set to something unique. |
 | `unknown` | "?" | Symbol for unknown value. |
 
 

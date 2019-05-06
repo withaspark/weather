@@ -22,6 +22,7 @@ function Weather(options) {
     this.config.station = options.station || "KJAX";
     this.config.weather_url = "https://api.weather.gov/stations/{station}/observations/latest";
     this.config.alert_url = "https://api.weather.gov/alerts/active?point={point}";
+    this.config.user_agent = options.user_agent || "@withaspark/weather User";
     this.config.cache_dir = (options.cache_dir || "/tmp").replace(new RegExp("/" + path.sep + "$/"));
     this.config.cache_prefix = options.cache_prefix || ("withaspark.weather." + this.config.station + ".");
     this.config.cache_lifetime = (options.hasOwnProperty("cache_lifetime"))
@@ -74,12 +75,17 @@ function Weather(options) {
                 : null,
             value = null;
 
+        // If value is cached, use it
         if (cached !== null) {
             value = cached;
         }
-
-        if (saved !== null) {
+        // If value is saved, use it
+        else if (saved !== null) {
             value = saved;
+        }
+        // If value is the name of a method, call it
+        else if (typeof that[key] === 'function') {
+            value = that[key]();
         }
 
         // Round all numbers to integers
@@ -113,10 +119,9 @@ function Weather(options) {
      *
      * @param {string} key
      * @param {*} value
-     * @param {integer} expiry
      * @returns {*} Value of value
      */
-    function cache(key, value, expiry) {
+    function cache(key, value) {
         if (typeof value === "undefined") {
             if (isCacheExpired(key)) {
                 return null;
@@ -125,11 +130,7 @@ function Weather(options) {
             return getFromCache(key);
         }
 
-        if (typeof expiry === "undefined") {
-            expiry = that.config.cache_lifetime;
-        }
-
-        setInCache(key, value, expiry);
+        setInCache(key, value);
 
         return value;
     }
@@ -141,14 +142,11 @@ function Weather(options) {
      * @returns {boolean}
      */
     function isCacheExpired(key) {
-        var data = (getFromCache(key, true) || "").split("\n", 2);
-
-        // Invalid cache file, just say it is expired
-        if (data.length !== 2) {
+        if (!fs.existsSync(getKeyCacheFile(key))) {
             return true;
         }
 
-        var expiry = data[0].split(":", 2)[1],
+        var expiry = that.config.cache_lifetime,
             age = getCacheAge(key);
 
         return (age >= expiry);
@@ -175,23 +173,18 @@ function Weather(options) {
      *
      * @param {string} key
      * @param {*} value
-     * @param {*} expiry
      * @returns {void}
      */
-    function setInCache(key, value, expiry) {
+    function setInCache(key, value, ) {
         if (typeof key !== "string" || typeof value === "undefined") {
             throw "Unable to set value in cache. String type key and any value is required.";
-        }
-
-        if (typeof expiry === 'undefined') {
-            expiry = that.cache_lifetime;
         }
 
         that.data[key] = value;
 
         fs.writeFileSync(
             getKeyCacheFile(key),
-            "expires:" + expiry + "\n" + value,
+            value,
             function (err) {
                 if (err) {
                     return console.error(err);
@@ -204,29 +197,18 @@ function Weather(options) {
      * Get the data for key from cache.
      *
      * @param {string} key
-     * @param {boolean} include_headers If true, will include metadata in return value
      * @returns {string}
      */
-    function getFromCache(key, include_headers) {
+    function getFromCache(key) {
         if (typeof key !== "string") {
             throw "Unable to get value from cache. String type key is required.";
-        }
-
-        if (typeof include_headers !== "boolean") {
-            include_headers = false;
         }
 
         if (!fs.existsSync(getKeyCacheFile(key))) {
             return null;
         }
 
-        var data = fs.readFileSync(getKeyCacheFile(key), { encoding: "utf8" });
-
-        if (include_headers) {
-            return data;
-        }
-
-        return data.split("\n", 2)[1];
+        return fs.readFileSync(getKeyCacheFile(key), { encoding: "utf8" });
     }
 
     /**
@@ -263,7 +245,6 @@ function Weather(options) {
      */
     function fetchWeatherForStation() {
         if (!isCacheExpiredMany([
-            'station',
             'timestamp', 'raw', 'coordinates', 'elevation', 'text',
             'temperature', 'dewpoint', 'windDirection', 'windSpeed',
             'pressure', 'visibility', 'precipitation', 'humidity',
@@ -277,13 +258,13 @@ function Weather(options) {
             that.config.weather_url.replace('{station}', that.config.station),
             {
                 headers: {
-                    'user-agent': '@withaspark/weather User',
+                    'user-agent': that.config.user_agent,
                 },
             }
         );
         response = JSON.parse(response.getBody("UTF-8"));
 
-        cache('timestamp', response.properties.timestamp);
+        cache('timestamp', moment(response.properties.timestamp).toISOString(true));
         cache('raw', response.properties.rawMessage);
         cache(
             'coordinates',
@@ -319,7 +300,7 @@ function Weather(options) {
             that.config.alert_url.replace('{point}', that.getCoordinates()),
             {
                 headers: {
-                    'user-agent': '@withaspark/weather User',
+                    'user-agent': that.config.user_agent,
                 },
             }
         );
@@ -338,7 +319,7 @@ function Weather(options) {
      * @returns {void}
      */
     function calcSecondaryProperties() {
-        var now = that.now,
+        var now = that.getNow(),
             coordinates = that.getCoordinates().split(",");
 
         if (coordinates && coordinates.length == 2) {

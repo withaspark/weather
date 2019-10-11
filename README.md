@@ -119,7 +119,7 @@ path/to/src/withaspark.weather.cli.js --station=KJAX
 | feelsLike | getFeelsLike() | Get the current feels-like temperature at the station, in degrees Fahrenheit. |
 | alerts | getAlerts() | Get the current weather advisory types at the station. This will contain a newline delimited list of advisory types. |
 | sunIcon | getSunIcon() | Get the unicode character that represents the sun position. To be used with the font [Weather Icons](https://github.com/erikflowers/weather-icons) by [@erikflowers](https://github.com/erikflowers). |
-| conditionIcon | getConditionIcon() | Get the unicode character that represents the weather conditions. If it is currently clear with no conditions of note, the icon will default to `sunIcon`. To be used with the font [Weather Icons](https://github.com/erikflowers/weather-icons) by [@erikflowers](https://github.com/erikflowers). |
+| conditionIcon | getConditionIcon() | Get the unicode character that represents the weather conditions. If it is currently clear with no conditions of note, it will return an empty string. To be used with the font [Weather Icons](https://github.com/erikflowers/weather-icons) by [@erikflowers](https://github.com/erikflowers). |
 | isDay | getIsDay() | Get if the sun is currently up at the station. Returns integer value (value of 1 means sun is up). |
 | isNight | getIsNight() | Get if the sun is currently down at the station. Returns integer value (value of 1 means sun is down). |
 | isSunrise | getIsSunrise() | Get if the sun is currently rising at the station. Returns integer value (value of 1 means the sun is rising). |

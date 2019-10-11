@@ -610,7 +610,7 @@ Weather.prototype.getSunIcon = function () {
  * @returns {char} Character code of the icon for the weather icon font
  */
 Weather.prototype.getConditionIcon = function () {
-    var icon = this.getSunIcon(),
+    var icon = "",
         condition = this.getAlerts() + "\n" + this.getText();
 
     if (condition.match(/trop.*storm/i)) {

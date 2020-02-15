@@ -670,7 +670,7 @@ Weather.prototype.getConditionIcon = function () {
     }
 
     if (condition.match(/bluster|windy/i)) {
-        return this.icons.window;
+        return this.icons.windy;
     }
 
     if (condition.match(/mostly cloudy/i)) {

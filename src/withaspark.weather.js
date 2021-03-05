@@ -277,7 +277,7 @@ function Weather(options) {
         cache('temperature', that.degCtoF(response.properties.temperature.value));
         cache('dewpoint', that.degCtoF(response.properties.dewpoint.value));
         cache('windDirection', response.properties.windDirection.value);
-        cache('windSpeed', that.metersPerSecondToMph(response.properties.windSpeed.value));
+        cache('windSpeed', that.kphToMph(response.properties.windSpeed.value));
         cache('pressure', that.pascalsToMmhg(response.properties.barometricPressure.value));
         cache('visibility', that.metersToMiles(response.properties.visibility.value));
         cache('precipitation', that.metersToInches(response.properties.precipitationLastHour.value));
@@ -704,6 +704,16 @@ Weather.prototype.degCtoF = function (temp) {
  */
 Weather.prototype.metersPerSecondToMph = function (speed) {
     return speed * 2.23694;
+};
+
+/**
+ * Convert speed from kilometers per hour to miles per hour.
+ *
+ * @param {integer|float} speed Speed in kmph
+ * @returns {float} Speed in mph
+ */
+Weather.prototype.kphToMph = function (speed) {
+    return speed * 0.621371;
 };
 
 /**

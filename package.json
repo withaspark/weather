@@ -22,8 +22,8 @@
   },
   "homepage": "https://github.com/withaspark/weather#readme",
   "dependencies": {
-    "minimist": "^1.2.0",
-    "moment": "^2.24.0",
+    "minimist": ">=1.2.3",
+    "moment": "^2.29.1",
     "suncalc": "^1.8.0",
     "sync-request": "^6.1.0"
   }
